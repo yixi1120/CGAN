@@ -1,8 +1,22 @@
-torch==1.10.0+cu111
-torchvision==0.11.1+cu111
-Pillow==8.4.0
-tensorboard==2.8.0
-matplotlib==3.5.1
-numpy==1.21.2
-scipy==1.7.1
-opencv-python==4.5.4
+# 基础深度学习框架
+torch>=1.7.0        # PyTorch深度学习框架
+torchvision>=0.8.0  # PyTorch计算机视觉扩展包
+
+# 数据处理和科学计算
+numpy>=1.19.0       # 数值计算库
+scipy>=1.6.0        # 科学计算库，用于KL散度计算
+
+# 图像处理
+Pillow>=8.0.0       # 图像处理库
+opencv-python>=4.5.0 # 计算机视觉库，用于图像处理
+
+# 可视化和进度显示
+matplotlib>=3.3.0   # 数据可视化库，用于绘制评估指标图表
+tqdm>=4.50.0        # 进度条显示，用于显示训练和测试进度
+
+# 模型分析和可视化
+tensorboard>=2.4.0  # TensorBoard可视化工具，用于训练/测试过程监控和指标追踪
+
+# 附加依赖
+datetime            # 日期时间处理（Python标准库）
+argparse            # 命令行参数解析（Python标准库） 
