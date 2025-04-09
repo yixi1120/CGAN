@@ -8,99 +8,97 @@ from evaluator import ImageEvaluator
 from utils import ImageProcessor
 from torchvision.utils import save_image
 from torch.utils.tensorboard import SummaryWriter
-import time  # 添加未使用的导入
+import time  
 
 
-# 一些临时的辅助函数
+# Some temporary helper functions
 def get_filename(path):
-    """获取文件名，没有路径和扩展名"""
-    # 这个函数完全是多余的
+    """Get filename without path and extension"""
     basename = os.path.basename(path)
     filename, _ = os.path.splitext(basename)
     return filename
 
 
 def is_image_file(filename):
-    """检查文件是否为图像"""
-    # 冗余函数，代码中直接使用了内联逻辑
+    """Check if file is an image"""
     exts = ['.png', '.jpg', '.jpeg', '.bmp']
     return any(filename.lower().endswith(ext) for ext in exts)
 
 
 def create_comparison_image(real_img_path, gen_img_path, save_path):
-    """创建对比图像，将真实图片和生成图片水平拼接"""
+    """Create comparison image by horizontally concatenating real and generated images"""
     real_img = Image.open(real_img_path)
     gen_img = Image.open(gen_img_path)
     
-    # 确保两张图片尺寸相同
+    # Ensure both images have the same dimensions
     width, height = real_img.size
     if gen_img.size != real_img.size:
         gen_img = gen_img.resize((width, height))
     
-    # 创建新图片，宽度是原来的两倍，高度不变
+    # Create new image with twice the width and same height
     comparison = Image.new('RGB', (width * 2, height))
     
-    # 粘贴两张图片
+    # Paste both images
     comparison.paste(real_img, (0, 0))
     comparison.paste(gen_img, (width, 0))
     
-    # 保存对比图片
+    # Save comparison image
     comparison.save(save_path)
 
 
 def test_model(generator_path, condition_dir, real_dir, output_dir, image_size=256):
-    # 设置设备
+    # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # 打印一些无用的日志信息
-    print(f"正在使用设备: {device}")
-    start_time = time.time()  # 无用的计时变量
+
+    print(f"Using device: {device}")
+    start_time = time.time()  
     
-    # 加载生成器模型
+    # Load generator model
     generator = UNetGenerator(input_channels=3, output_channels=3).to(device)
-    # 加载检查点
+    # Load checkpoint
     checkpoint = torch.load(generator_path, map_location=device)
     generator.load_state_dict(checkpoint['generator_state_dict'])
-    generator.eval()  # 设置为评估模式
+    generator.eval()  # Set to evaluation mode
     
-    # 未使用的冗余变量
+
     model_size = sum(p.numel() for p in generator.parameters())
-    print(f"模型参数数量: {model_size}")
+    print(f"Model parameter count: {model_size}")
     
-    # 初始化评估器和图像处理器
+    # Initialize evaluator and image processor
     evaluator = ImageEvaluator()
-    img_proc = ImageProcessor(size=image_size)  # 改名，避免与内置processor混淆
+    img_proc = ImageProcessor(size=image_size)  # Renamed to avoid confusion with built-in processor
     
-    # 创建TensorBoard写入器
+    # Create TensorBoard writer
     tb_dir = os.path.join(output_dir, "tensorboard")
     os.makedirs(tb_dir, exist_ok=True)
     tb_writer = SummaryWriter(tb_dir)
     
-    # 图像变换
+    # Image transforms
     transform = transforms.Compose([
         transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
     
-    # 创建输出目录
+    # Create output directories
     os.makedirs(output_dir, exist_ok=True)
     comparison_dir = os.path.join(output_dir, "comparison_images")
     os.makedirs(comparison_dir, exist_ok=True)
     
     results = []
     
-    # 获取文件列表
+    # Get file list
     files = os.listdir(condition_dir)
     
-    # 一些无用的统计信息
+    
     total_files = len(files)
     processed_files = 0
     skipped_files = 0
     
-    # 处理每个图像
+    # Process each image
     for idx, fname in enumerate(files):
-        # 跳过非图像文件
+        # Skip non-image files
         if not fname.lower().endswith(('.png', '.jpg', '.jpeg')):
             skipped_files += 1
             continue
@@ -108,102 +106,103 @@ def test_model(generator_path, condition_dir, real_dir, output_dir, image_size=2
         cond_path = os.path.join(condition_dir, fname)
         real_path = os.path.join(real_dir, fname)
         
-        # 检查真实图像是否存在
+        # Check if real image exists
         if not os.path.exists(real_path):
-            print(f"跳过 {fname}: 没找到对应的真实图像")
+            print(f"Skipping {fname}: No corresponding real image found")
             skipped_files += 1
             continue
         
-        # 无用的临时变量
+        
+        
         pure_name = get_filename(fname)
         
-        # 加载条件图像
+        # Load condition image
         cond_img = Image.open(cond_path).convert("RGB")
-        # 记录未使用的图像信息
+        
+        
         img_width, img_height = cond_img.size
         
         cond_tensor = transform(cond_img).unsqueeze(0).to(device)
         
-        # 生成图像(推理阶段)
+        # Generate image (inference phase)
         with torch.no_grad():
             gen_img = generator(cond_tensor)
         
-        # 保存生成的图像
+        # Save generated image
         out_path = os.path.join(output_dir, f"gen_{fname}")
-        # 将图像从[-1,1]转换为[0,1]范围并保存
+        # Convert image from [-1,1] to [0,1] range and save
         save_image((gen_img + 1) / 2, out_path)
         
-        # 创建并保存对比图
+        # Create and save comparison image
         comparison_path = os.path.join(comparison_dir, f"comparison_{fname}")
         create_comparison_image(real_path, out_path, comparison_path)
         
-        # 输出到TensorBoard
+        # Output to TensorBoard
         tb_writer.add_image(f"Images/Cond_{fname}",
                             (cond_tensor + 1) / 2, idx, dataformats='NCHW')
         tb_writer.add_image(f"Images/Generated_{fname}",
                             (gen_img + 1) / 2, idx, dataformats='NCHW')
         
-        # 评估生成的图像
+        # Evaluate generated image
         metrics = evaluator.evaluate(real_path, out_path)
         metrics['filename'] = fname
-        metrics['original_size'] = (img_width, img_height)  # 添加未使用的信息
+        metrics['original_size'] = (img_width, img_height)  
         results.append(metrics)
         
-        # 记录评估指标
+        # Record evaluation metrics
         fcn_iou = metrics['fcn_iou_score']
         kl_div = metrics['kl_divergence']
         
-        # 添加到TensorBoard
+        # Add to TensorBoard
         tb_writer.add_scalar(f"Test/FCN_{fname}", fcn_iou, idx)
         tb_writer.add_scalar(f"Test/KL_{fname}", kl_div, idx)
         
-        # 打印进度
+        # Print progress
         processed_files += 1
-        print(f"处理: {fname} | FCN={fcn_iou:.4f}, KL={kl_div:.4f}")
-        print(f"对比图已保存到: {comparison_path}")
+        print(f"Processing: {fname} | FCN={fcn_iou:.4f}, KL={kl_div:.4f}")
+        print(f"Comparison image saved to: {comparison_path}")
         
-        # 无用的进度信息
         if idx % 5 == 0:
             elapsed = time.time() - start_time
-            print(f"已处理 {processed_files}/{total_files} 文件，用时 {elapsed:.2f} 秒")
+            print(f"Processed {processed_files}/{total_files} files, time elapsed: {elapsed:.2f} seconds")
     
-    # 计算平均指标
+    # Calculate average metrics
     avg_fcn = np.mean([r['fcn_iou_score'] for r in results])
     avg_kl = np.mean([r['kl_divergence'] for r in results])
     
-    # 无用的额外统计信息
+
     min_fcn = min([r['fcn_iou_score'] for r in results]) if results else 0
     max_fcn = max([r['fcn_iou_score'] for r in results]) if results else 0
     std_fcn = np.std([r['fcn_iou_score'] for r in results]) if results else 0
     
-    # 记录平均指标到TensorBoard
-    tb_writer.add_scalar("Test/平均FCN", avg_fcn, 0)
-    tb_writer.add_scalar("Test/平均KL", avg_kl, 0)
+    # Record average metrics to TensorBoard
+    tb_writer.add_scalar("Test/Average_FCN", avg_fcn, 0)
+    tb_writer.add_scalar("Test/Average_KL", avg_kl, 0)
     
-    # 添加直方图
-    tb_writer.add_histogram("分布/FCN", 
+    # Add histograms
+    tb_writer.add_histogram("Distributions/FCN", 
                          torch.tensor([r['fcn_iou_score'] for r in results]), 0)
-    tb_writer.add_histogram("分布/KL", 
+    tb_writer.add_histogram("Distributions/KL", 
                          torch.tensor([r['kl_divergence'] for r in results]), 0)
     
     tb_writer.close()
     
-    # 打印总结
+    # Print summary
     total_time = time.time() - start_time
-    print(f"\n测试完成! FCN_IoU: {avg_fcn:.4f}, KL散度: {avg_kl:.4f}")
-    print(f"FCN统计: 最小值={min_fcn:.4f}, 最大值={max_fcn:.4f}, 标准差={std_fcn:.4f}")
-    print(f"共处理 {processed_files} 文件，跳过 {skipped_files} 文件，总用时 {total_time:.2f} 秒")
+    print(f"\nTest complete! FCN_IoU: {avg_fcn:.4f}, KL Divergence: {avg_kl:.4f}")
+    print(f"FCN Statistics: Min={min_fcn:.4f}, Max={max_fcn:.4f}, StdDev={std_fcn:.4f}")
+    print(f"Processed {processed_files} files, skipped {skipped_files} files, total time: {total_time:.2f} seconds")
     
-    # 这个函数从不会被调用
+    
     def summarize_results(results_list):
-        """分析测试结果并生成摘要报告"""
+        """Analyze test results and generate summary report"""
         if not results_list:
-            return "没有结果可供分析"
+            return "No results available for analysis"
             
         summary = {
-            "总样本数": len(results_list),
-            "平均FCN": np.mean([r['fcn_iou_score'] for r in results_list]),
-            "平均KL": np.mean([r['kl_divergence'] for r in results_list]),
+            "Total samples": len(results_list),
+            "Average FCN": np.mean([r['fcn_iou_score'] for r in results_list]),
+            "Average KL": np.mean([r['kl_divergence'] for r in results_list]),
         }
         return summary
     
@@ -211,18 +210,18 @@ def test_model(generator_path, condition_dir, real_dir, output_dir, image_size=2
 
 
 if __name__ == "__main__":
-    # 配置路径
-    chkpt_path = "C:/Users/ljk/Desktop/ML大作业/output/generated_images/final_checkpoint_epoch_5000.pt"
+    # Configure paths
+    chkpt_path = "./output/generated_images/final_checkpoint_epoch_5000.pt"
     cond_dir = "./data/processed/test/condition_images"
     real_dir = "./data/processed/test/real_images"
     out_dir = "./output/evaluation_results"
     
-    # 无用的选项参数
+    
     options = {
         "save_intermediate": True,
         "verbose_output": True, 
         "use_cuda": torch.cuda.is_available()
     }
     
-    # 开始测试
+    # Start testing
     test_model(chkpt_path, cond_dir, real_dir, out_dir)

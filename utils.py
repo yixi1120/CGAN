@@ -6,7 +6,9 @@ import numpy as np
 
 class ImageProcessor:
     def __init__(self, size=256):
+        # GPU will be faster
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # This transform seems to work well
         self.transform = transforms.Compose([
             transforms.Resize(size),
             transforms.ToTensor(),
@@ -14,28 +16,28 @@ class ImageProcessor:
         ])
 
     def load_image(self, image_path):
-        """加载并预处理图片"""
+        """Load and preprocess image"""
         image = Image.open(image_path)
         image_tensor = self.transform(image)
-        return image_tensor.unsqueeze(0).to(self.device)  # 添加batch维度并移到GPU
+        return image_tensor.unsqueeze(0).to(self.device)  # Add batch dimension and move to GPU
 
     def save_image(self, tensor, save_path):
-        """将输出张量转换回图片并保存"""
-        # 将值从[-1,1]转换回[0,1]
+        """Convert output tensor back to image and save"""
+        # Convert values from [-1,1] back to [0,1], model output uses tanh activation
         tensor = (tensor + 1) / 2.0
-        # 将tensor转换为numpy数组
+        # Convert tensor to numpy array
         image = tensor.squeeze(0).detach().cpu().numpy()
-        # 转换通道顺序从CxHxW到HxWxC
+        # Change channel order from CxHxW to HxWxC
         image = np.transpose(image, (1, 2, 0))
-        # 确保值在[0,1]范围内
+        # Ensure values are in [0,1] range, just in case
         image = np.clip(image, 0, 1)
-        # 转换为0-255的uint8格式
+        # Convert to 0-255 uint8 format
         image = (image * 255).astype(np.uint8)
-        # 保存图片
+        # Save image, note the format issue
         Image.fromarray(image).save(save_path)
 
     def load_image_pair(self, condition_image_path, real_image_path):
-        """加载条件图像和真实图像，返回包含这两个图像的元组"""
+        """Load condition image and real image, return tuple containing these two images"""
         condition_image = self.load_image(condition_image_path)
         real_image = self.load_image(real_image_path)
         return condition_image, real_image

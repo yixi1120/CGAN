@@ -5,9 +5,9 @@ class Discriminator(nn.Module):
     def __init__(self, input_channels=3):
         super().__init__()
         
-        # 鉴别器使用带步长的卷积进行下采样
+        # Discriminator uses strided convolutions for downsampling
         self.layers = nn.Sequential(
-            # 第一层不使用BatchNorm
+            # First layer does not use BatchNorm
             nn.Conv2d(input_channels, 64, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
             
@@ -28,13 +28,13 @@ class Discriminator(nn.Module):
             
             # 32 -> 31
             nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=1),
-            nn.Sigmoid()  # 输出范围压缩到 [0,1]，表示真实图片的概率
+            nn.Sigmoid()  # Output range compressed to [0,1], representing probability of real image
         )
 
     def forward(self, x):
         return self.layers(x)
 
-# 权重初始化函数
+# Weight initialization function
 def weights_init(m):
     if isinstance(m, nn.Conv2d):
         nn.init.normal_(m.weight, 0.0, 0.02)

@@ -39,7 +39,7 @@ class ImagePairDataset(Dataset):
         self.transform = transform
         self.image_files = []
         
-        # 获取两个目录中共同的文件名
+        # Get common filenames from both directories
         condition_files = set(os.listdir(condition_dir))
         real_files = set(os.listdir(real_dir))
         common_files = list(condition_files.intersection(real_files))
@@ -69,12 +69,12 @@ class GANTrainer:
     def __init__(self, condition_dir, real_dir, output_dir, image_size=256, batch_size=4, checkpoint_file=None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.batch_size = batch_size
-        self.checkpoint_file = checkpoint_file  # 保存为类属性
+        self.checkpoint_file = checkpoint_file  # Save as class attribute
         
-        # 创建SummaryWriter时确保不会覆盖现有记录
+        # Create SummaryWriter making sure not to overwrite existing logs
         log_dir = os.path.join(output_dir, 'logs')
         os.makedirs(log_dir, exist_ok=True)
-        self.writer = SummaryWriter(log_dir, purge_step=None)  # purge_step=None 确保不会覆盖之前的记录
+        self.writer = SummaryWriter(log_dir, purge_step=None)  # purge_step=None ensures not overwriting previous records
     
         self.generator = UNetGenerator(input_channels=3, output_channels=3).to(self.device)
         self.discriminator = Discriminator(input_channels=3).to(self.device)
@@ -102,7 +102,7 @@ class GANTrainer:
             drop_last=True
         )
     
-        # 修改标签大小以匹配鉴别器输出
+        # Modify label size to match discriminator output
         current_batch_size = batch_size
         self.real_label = torch.ones(current_batch_size, 1, 15, 15).to(self.device)
         self.fake_label = torch.zeros(current_batch_size, 1, 15, 15).to(self.device)
@@ -146,7 +146,7 @@ class GANTrainer:
             return None
     
     def train(self, num_epochs=1000):
-        # 从checkpoint恢复全局步数
+        # Restore global step from checkpoint
         global_step = 0
         checkpoint = self.safe_load_checkpoint(self.checkpoint_file)
         if checkpoint is not None and 'global_step' in checkpoint:
@@ -164,15 +164,15 @@ class GANTrainer:
                 condition_images = condition_images.to(self.device, non_blocking=True)
                 real_images = real_images.to(self.device, non_blocking=True)
                 
-                # 训练判别器
+                # Train discriminator
                 self.d_optimizer.zero_grad(set_to_none=True)
                 with torch.amp.autocast(device_type='cuda'):
                     d_real = self.discriminator(real_images)
                     d_loss_real = self.criterion(d_real, self.real_label[:current_batch_size])
                     
-                    # 生成器生成假图像
+                    # Generate fake images with generator
                     with torch.no_grad():
-                        fake_images = self.generator(condition_images)  # 只使用条件图像
+                        fake_images = self.generator(condition_images)  # Only using condition images
                     d_fake = self.discriminator(fake_images.detach())
                     d_loss_fake = self.criterion(d_fake, self.fake_label[:current_batch_size])
                     
@@ -183,17 +183,17 @@ class GANTrainer:
                     torch.nn.utils.clip_grad_norm_(self.discriminator.parameters(), max_norm=0.5)
                     self.d_optimizer.step()
                 
-                # 训练生成器（增加训练频率：每个批次训练2次）
-                for _ in range(2):  # 训练生成器两次
+                # Train generator (twice per batch to increase training frequency)
+                for _ in range(2):  # Train generator twice
                     self.g_optimizer.zero_grad(set_to_none=True)
                     with torch.amp.autocast(device_type='cuda'):
-                        fake_images = self.generator(condition_images)  # 只使用条件图像
+                        fake_images = self.generator(condition_images)  # Only using condition images
                         g_fake = self.discriminator(fake_images)
                         g_loss = self.criterion(g_fake, self.real_label[:current_batch_size])
                         
-                        # 添加L1损失，鼓励生成器生成与真实图像相似的图像
+                        # Add L1 loss to encourage generator to produce images similar to real ones
                         l1_loss = torch.mean(torch.abs(fake_images - real_images))
-                        g_loss = g_loss + 100 * l1_loss  # 权重系数可以调整
+                        g_loss = g_loss + 100 * l1_loss  # Weight coefficient can be adjusted
                     
                     g_loss.backward()
                     torch.nn.utils.clip_grad_norm_(self.generator.parameters(), max_norm=0.5)
@@ -234,12 +234,12 @@ class GANTrainer:
             'discriminator_state_dict': self.discriminator.state_dict(),
             'g_optimizer_state_dict': self.g_optimizer.state_dict(),
             'd_optimizer_state_dict': self.d_optimizer.state_dict(),
-            'global_step': global_step  # 从参数中获取global_step
+            'global_step': global_step  # Get global_step from parameter
         }, checkpoint_path)
         print(f"Checkpoint saved: {checkpoint_path}")
     
     def evaluate_and_save(self, epoch):
-        """评估模型并保存生成的图像"""
+        """Evaluate model and save generated images"""
         self.generator.eval()
         fcn_scores = []
         kl_divs = []
@@ -247,37 +247,37 @@ class GANTrainer:
         os.makedirs(self.output_dir, exist_ok=True)
         
         with torch.no_grad():
-            for i, batch in enumerate(self.dataloader):  # 使用训练数据加载器
+            for i, batch in enumerate(self.dataloader):  # Use training dataloader
                 if i >= 5:
                     break
                 
-                # 打印调试信息
-                print(f"批次类型: {type(batch)}")
+                # Print debug info
+                print(f"Batch type: {type(batch)}")
                 
-                # 正确解包batch - 它是一个包含两个张量的元组或列表
+                # Correctly unpack the batch - it's a tuple or list containing two tensors
                 if isinstance(batch, (list, tuple)) and len(batch) == 2:
                     condition_images, real_images = batch
                 else:
-                    print(f"批次格式异常: {type(batch)}")
+                    print(f"Abnormal batch format: {type(batch)}")
                     continue
                     
                 condition_images = condition_images.to(self.device)
                 real_images = real_images.to(self.device)
                 
-                # 使用条件图像生成假图像
+                # Generate fake images using condition images
                 fake_images = self.generator(condition_images)
                 
-                for j in range(min(condition_images.size(0), 5)):  # 限制每批最多5个样本
+                for j in range(min(condition_images.size(0), 5)):  # Limit to maximum 5 samples per batch
                     real_path = os.path.join(self.output_dir, f"epoch_{epoch}_real_{i}_{j}.png")
                     fake_path = os.path.join(self.output_dir, f"epoch_{epoch}_fake_{i}_{j}.png")
                     cond_path = os.path.join(self.output_dir, f"epoch_{epoch}_cond_{i}_{j}.png")
                     
-                    # 保存图像
+                    # Save images
                     self.processor.save_image(real_images[j], real_path)
                     self.processor.save_image(fake_images[j], fake_path)
                     self.processor.save_image(condition_images[j], cond_path)
                     
-                    # 评估生成的图像
+                    # Evaluate generated images
                     try:
                         scores = self.evaluator.evaluate(real_path, fake_path)
                         fcn_score = scores.get('fcn_iou_score', 0.0)
@@ -286,50 +286,50 @@ class GANTrainer:
                         fcn_scores.append(fcn_score)
                         kl_divs.append(kl_div)
                         
-                        # 记录每个样本的指标到TensorBoard
+                        # Record metrics for each sample to TensorBoard
                         self.writer.add_scalar(f'Samples/FCN_Score_sample_{i}_{j}', fcn_score, epoch)
                         self.writer.add_scalar(f'Samples/KL_Divergence_sample_{i}_{j}', kl_div, epoch)
                         
                         print(f"Epoch {epoch}, Sample {i}_{j}: FCN Score = {fcn_score:.4f}, KL Divergence = {kl_div:.4f}")
                     except Exception as e:
-                        print(f"评估时出错: {str(e)}")
+                        print(f"Error during evaluation: {str(e)}")
         
-        # 计算平均分数
+        # Calculate average scores
         avg_fcn_score = sum(fcn_scores) / len(fcn_scores) if fcn_scores else 0.0
         avg_kl_div = sum(kl_divs) / len(kl_divs) if kl_divs else 0.0
         
-        # 记录到TensorBoard
+        # Record to TensorBoard
         self.writer.add_scalar('Metrics/FCN_Score', avg_fcn_score, epoch)
         self.writer.add_scalar('Metrics/KL_Divergence', avg_kl_div, epoch)
         
-        # 将所有指标添加到直方图中，以便查看分布
+        # Add all metrics to histograms to see distributions
         self.writer.add_histogram('Distributions/FCN_Score', torch.tensor(fcn_scores), epoch)
         self.writer.add_histogram('Distributions/KL_Divergence', torch.tensor(kl_divs), epoch)
         
-        # 返回到训练模式
+        # Return to training mode
         self.generator.train()
 
 if __name__ == "__main__":
-    checkpoint_dir = "./checkpoints"  # 修改为相对路径
+    checkpoint_dir = "./checkpoints"  # Changed to relative path
     checkpoint_file = load_checkpoint_if_exists(checkpoint_dir)
     
-    # 如果checkpoints目录没有找到checkpoint，尝试从output/generated_images目录加载
+    # If no checkpoint found in checkpoints directory, try loading from output/generated_images
     if checkpoint_file is None:
         output_dir = "./output/generated_images"
         if os.path.exists(output_dir):
             checkpoint_file = load_checkpoint_if_exists(output_dir)
         if checkpoint_file is None:
-            print("尝试加载最终checkpoint: final_checkpoint_epoch_5000.pt")
+            print("Trying to load final checkpoint: final_checkpoint_epoch_5000.pt")
             final_checkpoint = os.path.join(output_dir, "final_checkpoint_epoch_5000.pt")
             if os.path.exists(final_checkpoint):
                 checkpoint_file = final_checkpoint
     
-    print(f"使用checkpoint文件: {checkpoint_file}")
+    print(f"Using checkpoint file: {checkpoint_file}")
     
     trainer = GANTrainer(
-        condition_dir="./data/processed/train/condition_images",  # 条件图像目录
-        real_dir="./data/processed/train/real_images",            # 真实图像目录
-        output_dir="./output/generated_images",                   # 输出目录
+        condition_dir="./data/processed/train/condition_images",  # Condition images directory
+        real_dir="./data/processed/train/real_images",            # Real images directory
+        output_dir="./output/generated_images",                   # Output directory
         batch_size=4,
         checkpoint_file=checkpoint_file
     )
